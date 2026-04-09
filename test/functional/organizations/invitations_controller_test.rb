@@ -26,7 +26,7 @@ class Organizations::InvitationsControllerTest < ActionDispatch::IntegrationTest
   test "PATCH /organizations/:organization_handle/invitation" do
     patch organization_invitation_path(@organization, as: @user)
 
-    assert_redirected_to organization_path(@organization)
+    assert_redirected_to organization_path(id: @organization)
 
     @membership.reload
 

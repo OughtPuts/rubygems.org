@@ -29,5 +29,4 @@ class HomeControllerTest < ActionController::TestCase
 
     assert_equal I18n.default_locale, I18n.locale
   end
-
 end

@@ -1,7 +1,7 @@
 <% 
 
     add_breadcrumb "Organizations", organizations_path
-    add_breadcrumb @organization.handle, organization_path(@organization)
+    add_breadcrumb @organization.handle, organization_path(id: @organization)
     add_breadcrumb "Invitation", organization_invitation_path(@organization)
 
 %>

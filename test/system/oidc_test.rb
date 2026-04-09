@@ -83,7 +83,7 @@ class OIDCTest < ApplicationSystemTestCase
     create(:version, rubygem: rubygem, metadata: { "source_code_uri" => "https://github.com/example/repo" })
 
     sign_in
-    visit rubygem_path(rubygem.slug)
+    visit rubygem_path(id: rubygem.slug)
     click_link "OIDC: Create"
     verify_session
 
@@ -228,7 +228,7 @@ class OIDCTest < ApplicationSystemTestCase
 
     sign_in
 
-    visit rubygem_path(rubygem.slug)
+    visit rubygem_path(id: rubygem.slug)
     click_link "OIDC: Create"
     verify_session
 
@@ -323,19 +323,19 @@ class OIDCTest < ApplicationSystemTestCase
     rubygem = create(:rubygem, name: "rubygem0")
     create(:version, rubygem: rubygem, metadata: { "source_code_uri" => "https://github.com/example/rubygem0" })
 
-    visit new_rubygem_trusted_publisher_path(rubygem.slug)
+    visit new_rubygem_trusted_publisher_path(rubygem_id: rubygem.slug)
 
     assert_text "Please sign in to continue."
 
     sign_in
-    visit new_rubygem_trusted_publisher_path(rubygem.slug)
+    visit new_rubygem_trusted_publisher_path(rubygem_id: rubygem.slug)
     verify_session
 
     assert_text "Forbidden"
 
     create(:ownership, rubygem: rubygem, user: @user)
 
-    visit rubygem_trusted_publishers_path(rubygem.slug)
+    visit rubygem_trusted_publishers_path(rubygem_id: rubygem.slug)
 
     page.assert_selector "h1", text: "Trusted Publishers"
     page.assert_text("Trusted publishers for rubygem0")
@@ -411,7 +411,7 @@ class OIDCTest < ApplicationSystemTestCase
     create(:version, rubygem:)
 
     sign_in
-    visit rubygem_trusted_publishers_path(rubygem.slug)
+    visit rubygem_trusted_publishers_path(rubygem_id: rubygem.slug)
     verify_session
 
     click_button "Delete"
