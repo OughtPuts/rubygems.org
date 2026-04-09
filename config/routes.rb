@@ -4,7 +4,9 @@ Rails.application.routes.draw do
   ################################################################################
   # Root
 
-  root to: 'home#index'
+  scope "(:locale)", locale: /nl|zh-CN|zh-TW|pt-BR|fr|es|de|ja/ do
+    root to: 'home#index'
+  end
 
   ################################################################################
   # API
@@ -157,7 +159,8 @@ Rails.application.routes.draw do
 
   ################################################################################
   # UI
-  scope constraints: { format: :html }, defaults: { format: 'html' } do
+  scope "(:locale)", locale: /nl|zh-CN|zh-TW|pt-BR|fr|es|de|ja/ do
+    scope constraints: { format: :html }, defaults: { format: 'html' } do
     resource :search, only: :show do
       get :advanced
     end
@@ -312,6 +315,7 @@ Rails.application.routes.draw do
       resources :gems, only: :index, controller: 'organizations/gems'
     end
   end
+  end
 
   ################################################################################
   # UI API
@@ -339,15 +343,17 @@ Rails.application.routes.draw do
 
   ################################################################################
   # static pages routes
-  get 'pages/sponsors' => redirect('/pages/supporters'), constraints: { format: :html }
-  get 'pages/*id' => 'pages#show', constraints: { format: :html, id: Regexp.union(Gemcutter::PAGES) }, as: :page
+  scope "(:locale)", locale: /nl|zh-CN|zh-TW|pt-BR|fr|es|de|ja/ do
+    get 'pages/sponsors' => redirect('/pages/supporters'), constraints: { format: :html }
+    get 'pages/*id' => 'pages#show', constraints: { format: :html, id: Regexp.union(Gemcutter::PAGES) }, as: :page
 
-  resources :policies, only: %i[index show], constraints: { format: :html, policy: Regexp.union(Gemcutter::POLICY_PAGES) },
-    param: :policy do
-      collection do
-        patch :acknowledge
+    resources :policies, only: %i[index show], constraints: { format: :html, policy: Regexp.union(Gemcutter::POLICY_PAGES) },
+      param: :policy do
+        collection do
+          patch :acknowledge
+        end
       end
-    end
+  end
 
   ################################################################################
   # Internal Routes

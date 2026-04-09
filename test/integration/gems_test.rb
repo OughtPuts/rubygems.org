@@ -31,8 +31,6 @@ class GemsTest < ActionDispatch::IntegrationTest
   end
 
   test "canonical/alternate urls for gem points to most recent version" do
-    skip "locales temporarily disabled"
-
     base_url = "http://localhost/gems/sandworm/versions/1.1.1"
     create(:version, rubygem: @rubygem, number: "1.1.1")
     get rubygem_path(@rubygem.slug)
@@ -43,7 +41,7 @@ class GemsTest < ActionDispatch::IntegrationTest
     alternates = page.all(:css, css, visible: false)
     # I18n.available_locales.length + 1 (x-default)
     assert_equal (I18n.available_locales.length + 1), alternates.length
-    exp = I18n.available_locales.map { "#{base_url}?locale=#{it}" } << base_url
+    exp = I18n.available_locales.map { |locale| locale == I18n.default_locale ? base_url : "http://localhost/#{locale}/gems/sandworm/versions/1.1.1" } << base_url
     act = alternates.pluck(:href)
 
     assert_same_elements exp, act
