@@ -18,8 +18,8 @@ class Organizations::MembersTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select "h1", text: "Members"
     assert_select "a", text: "Invite", count: 0
-    assert_select "li a[href=?]", profile_path(@owner), text: @owner.handle
-    assert_select "li a[href=?]", profile_path(@maintainer), text: @maintainer.handle
+    assert_select "li a[href=?]", profile_path(id: @owner), text: @owner.handle
+    assert_select "li a[href=?]", profile_path(id: @maintainer), text: @maintainer.handle
   end
 
   should "get index as an owner" do

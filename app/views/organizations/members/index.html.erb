@@ -22,7 +22,7 @@
   <%= c.divided_list do %>
     <% @memberships.each do |membership| %>
       <%= c.list_item_to(
-        policy(@organization).list_memberships? ? edit_organization_membership_path(@organization, membership) : profile_path(membership.user),
+        policy(@organization).list_memberships? ? edit_organization_membership_path(@organization, membership) : profile_path(id: membership.user),
         title: membership.user.handle,
       ) do %>
         <div class="flex flex-col w-full justify-between">

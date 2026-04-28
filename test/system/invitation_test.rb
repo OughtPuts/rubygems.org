@@ -16,7 +16,7 @@ class InvitationTest < ApplicationSystemTestCase
   test "inviting a user to an organization" do
     sign_in
 
-    visit organization_path(@organization)
+    visit organization_path(id: @organization)
     click_on "Invite"
 
     fill_in "Handle", with: @outside_user.handle
@@ -33,7 +33,7 @@ class InvitationTest < ApplicationSystemTestCase
 
     sign_in maintainer
 
-    visit organization_path(@organization)
+    visit organization_path(id: @organization)
 
     assert_no_text "Invite"
   end
