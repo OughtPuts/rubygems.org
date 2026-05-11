@@ -30,6 +30,7 @@ en:
   api_key_forbidden: The API key doesn't have access
   api_key_soft_deleted: An invalid API key cannot be used. Please delete it and create a new one.
   api_key_insufficient_scope: This API key cannot perform the specified action on this gem.
+  email_not_confirmed: Please confirm your email address before using the API. Check your inbox for a confirmation link.
   please_sign_up: Access Denied. Please sign up for an account at https://rubygems.org
   please_sign_in: Please sign in to continue.
   otp_incorrect: Your OTP code is incorrect. Please check it and retry.

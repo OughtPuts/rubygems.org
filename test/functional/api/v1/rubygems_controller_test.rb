@@ -206,6 +206,23 @@ class Api::V1::RubygemsControllerTest < ActionController::TestCase
       end
     end
 
+    context "when user email is unconfirmed" do
+      setup do
+        @user.update!(email_confirmed: false)
+        post :create, body: gem_file(&:read)
+      end
+
+      should respond_with :forbidden
+
+      should "return email confirmation error" do
+        assert_match "Please confirm your email address", @response.body
+      end
+
+      should "not register any gem" do
+        assert_equal 0, Rubygem.count
+      end
+    end
+
     context "When mfa for UI and API is enabled" do
       setup do
         @user.enable_totp!(ROTP::Base32.random_base32, :ui_and_api)
