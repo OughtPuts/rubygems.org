@@ -43,12 +43,20 @@ class GemInfo
   end
 
   def self.compact_index_versions(date)
-    query = ["(SELECT r.name, v.created_at as date, v.info_checksum, v.number, v.platform
+    compact_index_versions_query(date, checksum_col: "info_checksum", yanked_checksum_col: "yanked_info_checksum")
+  end
+
+  def self.compact_index_versions_v2(date)
+    compact_index_versions_query(date, checksum_col: "info_checksum_v2", yanked_checksum_col: "yanked_info_checksum_v2")
+  end
+
+  def self.compact_index_versions_query(date, checksum_col:, yanked_checksum_col:)
+    query = ["(SELECT r.name, v.created_at as date, v.#{checksum_col} as info_checksum, v.number, v.platform
               FROM rubygems AS r, versions AS v
               WHERE v.rubygem_id = r.id AND
                     v.created_at > ?)
               UNION
-              (SELECT r.name, v.yanked_at as date, v.yanked_info_checksum as info_checksum, '-'||v.number, v.platform
+              (SELECT r.name, v.yanked_at as date, v.#{yanked_checksum_col} as info_checksum, '-'||v.number, v.platform
               FROM rubygems AS r, versions AS v
               WHERE v.rubygem_id = r.id AND
                     v.indexed is false AND
@@ -96,7 +104,7 @@ class GemInfo
     end
   end
 
-  private_class_method :map_gem_versions, :execute_raw_sql
+  private_class_method :map_gem_versions, :execute_raw_sql, :compact_index_versions_query
 
   private
 
@@ -163,20 +171,22 @@ class GemInfo
   end
 
   def requirements_and_dependencies
-    group_by_columns = "number, platform, sha256, info_checksum, required_ruby_version, required_rubygems_version, versions.created_at"
+    @requirements_and_dependencies ||= begin
+      group_by_columns = "number, platform, sha256, info_checksum, required_ruby_version, required_rubygems_version, versions.created_at"
 
-    dep_req_agg = "string_agg(dependencies.requirements, '@' ORDER BY rubygems_dependencies.name, dependencies.id)"
+      dep_req_agg = "string_agg(dependencies.requirements, '@' ORDER BY rubygems_dependencies.name, dependencies.id)"
 
-    dep_name_agg = "string_agg(coalesce(rubygems_dependencies.name, '0'), ',' ORDER BY rubygems_dependencies.name) AS dep_name"
+      dep_name_agg = "string_agg(coalesce(rubygems_dependencies.name, '0'), ',' ORDER BY rubygems_dependencies.name) AS dep_name"
 
-    Rubygem.joins("LEFT JOIN versions ON versions.rubygem_id = rubygems.id
-        LEFT JOIN dependencies ON dependencies.version_id = versions.id
-        LEFT JOIN rubygems rubygems_dependencies
-          ON rubygems_dependencies.id = dependencies.rubygem_id
-          AND dependencies.scope = 'runtime'")
-      .where("rubygems.name = ? AND versions.indexed = true", @rubygem_name)
-      .group(Arel.sql(group_by_columns))
-      .order(Arel.sql("versions.created_at, number, platform, dep_name"))
-      .pluck(Arel.sql("#{group_by_columns}, #{dep_req_agg}, #{dep_name_agg}"))
+      Rubygem.joins("LEFT JOIN versions ON versions.rubygem_id = rubygems.id
+          LEFT JOIN dependencies ON dependencies.version_id = versions.id
+          LEFT JOIN rubygems rubygems_dependencies
+            ON rubygems_dependencies.id = dependencies.rubygem_id
+            AND dependencies.scope = 'runtime'")
+        .where("rubygems.name = ? AND versions.indexed = true", @rubygem_name)
+        .group(Arel.sql(group_by_columns))
+        .order(Arel.sql("versions.created_at, number, platform, dep_name"))
+        .pluck(Arel.sql("#{group_by_columns}, #{dep_req_agg}, #{dep_name_agg}"))
+    end
   end
 end
