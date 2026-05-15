@@ -67,8 +67,26 @@ class GemInfo
   end
 
   def self.compact_index_public_versions(updated_at)
+    compact_index_public_versions_query(updated_at,
+      checksum_col: "info_checksum", yanked_checksum_col: "yanked_info_checksum",
+      coalesce_yanked: true)
+  end
+
+  def self.compact_index_public_versions_v2(updated_at)
+    compact_index_public_versions_query(updated_at,
+      checksum_col: "info_checksum_v2", yanked_checksum_col: "yanked_info_checksum_v2",
+      coalesce_yanked: false)
+  end
+
+  def self.compact_index_public_versions_query(updated_at, checksum_col:, yanked_checksum_col:, coalesce_yanked:)
+    checksum_expr = if coalesce_yanked
+                      "COALESCE(v.#{yanked_checksum_col}, v.#{checksum_col})"
+                    else
+                      "CASE WHEN v.indexed THEN v.#{checksum_col} ELSE v.#{yanked_checksum_col} END"
+                    end
+
     query = ["SELECT r.name, v.indexed, COALESCE(v.yanked_at, v.created_at) as stamp,
-                     v.sha256, COALESCE(v.yanked_info_checksum, v.info_checksum) as info_checksum,
+                     v.sha256, #{checksum_expr} as info_checksum,
                      v.number, v.platform
               FROM rubygems AS r, versions AS v
               WHERE v.rubygem_id = r.id AND
@@ -104,7 +122,7 @@ class GemInfo
     end
   end
 
-  private_class_method :map_gem_versions, :execute_raw_sql, :compact_index_versions_query
+  private_class_method :map_gem_versions, :execute_raw_sql, :compact_index_versions_query, :compact_index_public_versions_query
 
   private
 
