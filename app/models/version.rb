@@ -4,6 +4,7 @@ require "digest/sha2"
 
 class Version < ApplicationRecord # rubocop:disable Metrics/ClassLength
   RUBYGEMS_IMPORT_DATE = Date.parse("2009-07-25")
+  CONTENT_ADDRESS_LENGTH = 10
 
   belongs_to :rubygem, touch: true
   has_many :dependencies, lambda {
@@ -37,9 +38,9 @@ class Version < ApplicationRecord # rubocop:disable Metrics/ClassLength
   validates :platform, length: { maximum: Gemcutter::MAX_FIELD_LENGTH }, format: { with: Patterns::NAME_PATTERN }
   validates :gem_platform, length: { maximum: Gemcutter::MAX_FIELD_LENGTH }, format: { with: Patterns::NAME_PATTERN },
             if: -> { validation_context == :create || gem_platform_changed? }
-  validates :full_name, presence: true, uniqueness: { case_sensitive: false },
+  validates :full_name, presence: true, uniqueness: { case_sensitive: false, scope: :required_ruby_version },
             if: -> { validation_context == :create || full_name_changed? }
-  validates :gem_full_name, presence: true, uniqueness: { case_sensitive: false },
+  validates :gem_full_name, presence: true, uniqueness: { case_sensitive: false, scope: :required_ruby_version },
             if: -> { validation_context == :create || gem_full_name_changed? }
   validates :rubygem, presence: true
   validates :licenses, length: { maximum: Gemcutter::MAX_FIELD_LENGTH }, allow_blank: true
@@ -363,7 +364,8 @@ class Version < ApplicationRecord # rubocop:disable Metrics/ClassLength
       "licenses"                   => licenses,
       "requirements"               => requirements,
       "sha"                        => sha256_hex,
-      "spec_sha"                   => spec_sha256_hex
+      "spec_sha"                   => spec_sha256_hex,
+      "content_address"            => content_address
     }
   end
 
@@ -451,7 +453,65 @@ class Version < ApplicationRecord # rubocop:disable Metrics/ClassLength
   end
 
   def gem_file_name
+    return content_addressed_gem_file_name if content_addressed?
+
+    legacy_gem_file_name
+  end
+
+  def legacy_gem_file_name
     "#{full_name}.gem"
+  end
+
+  def content_addressed_gem_file_name
+    "#{rubygem.name}-#{number}-#{content_address}.gem"
+  end
+
+  def gemspec_file_name
+    return content_addressed_gemspec_file_name if content_addressed?
+
+    legacy_gemspec_file_name
+  end
+
+  def legacy_gemspec_file_name
+    "#{full_name}.gemspec.rz"
+  end
+
+  def content_addressed_gemspec_file_name
+    "#{rubygem.name}-#{number}-#{content_address}.gemspec.rz"
+  end
+
+  def content_address
+    sha256_hex&.first(CONTENT_ADDRESS_LENGTH)
+  end
+
+  def content_addressed?
+    return false if content_address.blank?
+    return false if rubygem_id.blank? || number.blank? || platform.blank?
+
+    Version.where(rubygem_id:, number:, platform:).where.not(id:).exists?
+  end
+
+  def legacy_file_name_available?
+    return true if rubygem_id.blank? || number.blank? || platform.blank?
+
+    !Version.where(rubygem_id:, number:, platform:).where.not(id:).exists?
+  end
+
+  def owns_legacy_file_name?
+    return true if id.blank? || rubygem_id.blank? || number.blank? || platform.blank?
+
+    Version.where(rubygem_id:, number:, platform:)
+      .order(:created_at, :id)
+      .limit(1)
+      .pick(:id) == id
+  end
+
+  def stored_gem_file_names
+    [gem_file_name, (legacy_gem_file_name if owns_legacy_file_name?)].compact.uniq
+  end
+
+  def stored_gemspec_file_names
+    [gemspec_file_name, (legacy_gemspec_file_name if owns_legacy_file_name?)].compact.uniq
   end
 
   private
@@ -461,12 +521,12 @@ class Version < ApplicationRecord # rubocop:disable Metrics/ClassLength
   end
 
   def platform_and_number_are_unique
-    return unless Version.exists?(rubygem_id: rubygem_id, number: number, platform: platform)
+    return unless Version.exists?(rubygem_id:, number:, platform:, required_ruby_version:)
     errors.add(:base, "A version already exists with this number or platform.")
   end
 
   def gem_platform_and_number_are_unique
-    platforms = Version.where(rubygem_id: rubygem_id, number: number, gem_platform: gem_platform).pluck(:platform)
+    platforms = Version.where(rubygem_id:, number:, gem_platform:, required_ruby_version:).pluck(:platform)
     return if platforms.empty?
     errors.add(:base, "A version already exists with this number and resolved platform #{platforms}")
   end
@@ -530,7 +590,7 @@ class Version < ApplicationRecord # rubocop:disable Metrics/ClassLength
   end
 
   def unique_canonical_number
-    version = Version.find_by(canonical_number: canonical_number, rubygem_id: rubygem_id, platform: platform)
+    version = Version.find_by(canonical_number:, rubygem_id:, platform:, required_ruby_version:)
     errors.add(:canonical_number, "has already been taken. Existing version: #{version.number}") unless version.nil?
   end
 
