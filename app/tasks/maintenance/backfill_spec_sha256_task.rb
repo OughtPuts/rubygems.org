@@ -11,7 +11,7 @@ class Maintenance::BackfillSpecSha256Task < MaintenanceTasks::Task
     logger.tagged(version_id: version.id, name: version.rubygem.name, number: version.number, platform: version.platform) do
       logger.info "Updating spec_sha256 for #{version.full_name}"
 
-      spec_path = "quick/Marshal.4.8/#{version.full_name}.gemspec.rz"
+      spec_path = "quick/Marshal.4.8/#{version.gemspec_file_name}"
       spec_contents = RubygemFs.instance.get(spec_path)
 
       if spec_contents.nil?

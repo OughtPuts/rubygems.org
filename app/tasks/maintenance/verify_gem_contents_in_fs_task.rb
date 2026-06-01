@@ -27,7 +27,7 @@ class Maintenance::VerifyGemContentsInFsTask < MaintenanceTasks::Task
   def process(version)
     logger.tagged(version_id: version.id, name: version.rubygem.name, number: version.number, platform: version.platform) do
       validate_checksum(version, "gem", "gems/#{version.gem_file_name}", version.sha256)
-      validate_checksum(version, "spec", "quick/Marshal.4.8/#{version.full_name}.gemspec.rz", version.spec_sha256)
+      validate_checksum(version, "spec", "quick/Marshal.4.8/#{version.gemspec_file_name}", version.spec_sha256)
     end
   end
 
