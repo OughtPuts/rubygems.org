@@ -50,12 +50,19 @@ class GemInfo
     checksum_column = config[:checksum_column]
     yanked_checksum_column = config[:yanked_checksum_column]
 
-    query = ["(SELECT r.name, v.created_at as date, v.#{checksum_column} as info_checksum, v.number, v.platform
+    variant_count_sql = "(SELECT COUNT(*) FROM versions sibling_versions
+                          WHERE sibling_versions.rubygem_id = v.rubygem_id
+                            AND sibling_versions.number = v.number
+                            AND sibling_versions.platform = v.platform)"
+
+    query = ["(SELECT r.name, v.created_at as date, v.#{checksum_column} as info_checksum, v.number, v.platform, v.sha256,
+                      #{variant_count_sql} as variant_count
               FROM rubygems AS r, versions AS v
               WHERE v.rubygem_id = r.id AND
                     v.created_at > ?)
               UNION
-              (SELECT r.name, v.yanked_at as date, v.#{yanked_checksum_column} as info_checksum, '-'||v.number, v.platform
+              (SELECT r.name, v.yanked_at as date, v.#{yanked_checksum_column} as info_checksum, '-'||v.number, v.platform, v.sha256,
+                      #{variant_count_sql} as variant_count
               FROM rubygems AS r, versions AS v
               WHERE v.rubygem_id = r.id AND
                     v.indexed is false AND
@@ -70,9 +77,14 @@ class GemInfo
     checksum_column = config[:checksum_column]
     yanked_checksum_column = config[:yanked_checksum_column]
 
+    variant_count_sql = "(SELECT COUNT(*) FROM versions sibling_versions
+                          WHERE sibling_versions.rubygem_id = v.rubygem_id
+                            AND sibling_versions.number = v.number
+                            AND sibling_versions.platform = v.platform)"
+
     query = ["SELECT r.name, v.indexed, COALESCE(v.yanked_at, v.created_at) as stamp,
                      v.sha256, COALESCE(v.#{yanked_checksum_column}, v.#{checksum_column}) as info_checksum,
-                     v.number, v.platform
+                     v.number, v.platform, #{variant_count_sql} as variant_count
               FROM rubygems AS r, versions AS v
               WHERE v.rubygem_id = r.id AND
                     (v.created_at <= ? OR v.yanked_at <= ?)
@@ -97,17 +109,35 @@ class GemInfo
 
   def self.map_gem_versions(versions_by_gem)
     versions_by_gem.map do |gem_name, versions|
+      content_addressed_keys = content_addressed_keys_for(versions)
       compact_index_versions = versions.map do |version|
+        content_addressed = version["variant_count"].to_i > 1 ||
+          content_addressed_keys.include?([version["number"].delete_prefix("-"), version["platform"]])
+        artifact_id = artifact_id_for(version["sha256"]) if content_addressed
         CompactIndex::GemVersion.new(version["number"],
           version["platform"],
           version["sha256"],
-          version["info_checksum"])
+          version["info_checksum"],
+          nil,
+          nil,
+          nil,
+          artifact_id)
       end
       CompactIndex::Gem.new(gem_name, compact_index_versions)
     end
   end
 
-  private_class_method :map_gem_versions, :execute_raw_sql
+  def self.content_addressed_keys_for(versions)
+    versions.group_by { |version| [version["number"].delete_prefix("-"), version["platform"]] }
+      .select { |_, matches| matches.many? }
+      .keys
+  end
+
+  def self.artifact_id_for(sha256)
+    Version._sha256_hex(sha256)&.first(Version::CONTENT_ADDRESS_LENGTH)
+  end
+
+  private_class_method :map_gem_versions, :execute_raw_sql, :content_addressed_keys_for, :artifact_id_for
 
   private
 
@@ -123,7 +153,10 @@ class GemInfo
   end
 
   def compute_compact_index_info(version:)
-    requirements_and_dependencies.map do |row|
+    rows = requirements_and_dependencies
+    content_addressed_keys = rows.group_by { |row| [row[0], row[1]] }.select { |_, matches| matches.many? }.keys
+
+    rows.map do |row|
       dependencies = []
       if row[DEPENDENCY_REQUIREMENTS_INDEX]
         reqs = row[DEPENDENCY_REQUIREMENTS_INDEX].split("@")
@@ -137,8 +170,9 @@ class GemInfo
       number, platform, checksum, info_checksum, ruby_version, rubygems_version, created_at, = row
       version_class = VERSIONS.dig(version, :klass)
       checksum = Version._sha256_hex(checksum)
+      artifact_id = checksum&.first(Version::CONTENT_ADDRESS_LENGTH) if content_addressed_keys.include?([number, platform])
       created_at = created_at&.utc&.iso8601
-      args = { number:, platform:, checksum:, info_checksum:, dependencies:, ruby_version:, rubygems_version:, created_at: }
+      args = { number:, platform:, checksum:, info_checksum:, dependencies:, ruby_version:, rubygems_version:, created_at:, artifact_id: }
       args = args.slice(*version_class.members)
       version_class.new(**args)
     end
