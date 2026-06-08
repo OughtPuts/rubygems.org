@@ -40,7 +40,14 @@ class Api::V1::DeletionsController < Api::BaseController
       begin
         version = params.expect(:version)
         platform = params.permit(:platform).fetch(:platform, nil)
-        @version = @rubygem.find_version!(number: version, platform: platform)
+        ruby_requirement = params.permit(:ruby_requirement).fetch(:ruby_requirement, nil)
+        content_address = params.permit(:content_address).fetch(:content_address, nil)
+        @version = @rubygem.find_version!(
+          number: version,
+          platform: platform,
+          ruby_requirement:,
+          content_address:
+        )
       rescue ActiveRecord::RecordNotFound
         render plain: response_with_mfa_warning("The version #{version}#{" (#{platform})" if platform.present?} does not exist."),
                status: :not_found

@@ -109,15 +109,11 @@ class Deletion < ApplicationRecord
   end
 
   def remove_from_storage
-    RubygemFs.instance.remove(
-      "gems/#{version.gem_file_name}",
-      "quick/Marshal.4.8/#{version.full_name}.gemspec.rz"
-    )
+    RubygemFs.instance.remove(*storage_paths)
   end
 
   def restore_to_storage
-    RubygemFs.instance.restore("gems/#{version.gem_file_name}")
-    RubygemFs.instance.restore("quick/Marshal.4.8/#{version.full_name}.gemspec.rz")
+    storage_paths.each { |path| RubygemFs.instance.restore(path) }
   end
 
   def remove_version_contents
@@ -129,8 +125,7 @@ class Deletion < ApplicationRecord
   end
 
   def purge_fastly
-    FastlyPurgeJob.perform_later(path: "gems/#{version.gem_file_name}", soft: false)
-    FastlyPurgeJob.perform_later(path: "quick/Marshal.4.8/#{version.full_name}.gemspec.rz", soft: false)
+    storage_paths.each { |path| FastlyPurgeJob.perform_later(path:, soft: false) }
   end
 
   def update_search_index
@@ -143,6 +138,11 @@ class Deletion < ApplicationRecord
     version.yanked_info_checksum = gem_info.info_checksum(version: 1)
     version.yanked_info_checksum_v2 = gem_info.info_checksum(version: 2)
     version.save(validate: false)
+  end
+
+  def storage_paths
+    version.stored_gem_file_names.map { |file_name| "gems/#{file_name}" } +
+      version.stored_gemspec_file_names.map { |file_name| "quick/Marshal.4.8/#{file_name}" }
   end
 
   def send_gem_yanked_mail

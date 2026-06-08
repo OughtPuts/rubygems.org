@@ -122,6 +122,7 @@ class Pusher
         number: spec.version.to_s,
         platform: spec.original_platform.to_s,
         gem_platform: spec.platform.to_s,
+        required_ruby_version: spec.required_ruby_version.to_s,
         size: size,
         sha256: sha256,
         spec_sha256: spec_sha256,
@@ -135,7 +136,11 @@ class Pusher
 
       # If the gem is yanked, we can't repush it
       # Additionally, we don't allow overwriting existing versions
-      if (existing = @rubygem.versions.find_by(number: version.number, platform: version.platform))
+      if (existing = @rubygem.versions.find_by(
+        number: version.number,
+        platform: version.platform,
+        required_ruby_version: version.required_ruby_version
+      ))
         return republish_notification(existing)
       end
 
@@ -331,21 +336,31 @@ class Pusher
 
   # we validate that the version full_name == spec.original_name
   def write_gem(body, spec_contents)
-    gem_path = "gems/#{@version.gem_file_name}"
     gem_contents = body.string
 
-    spec_path = "quick/Marshal.4.8/#{@version.full_name}.gemspec.rz"
+    gem_paths = ["gems/#{@version.content_addressed_gem_file_name}"]
+    spec_paths = ["quick/Marshal.4.8/#{@version.content_addressed_gemspec_file_name}"]
+
+    if @version.legacy_file_name_available?
+      gem_paths << "gems/#{@version.legacy_gem_file_name}"
+      spec_paths << "quick/Marshal.4.8/#{@version.legacy_gemspec_file_name}"
+    end
 
     # do all processing _before_ we upload anything to S3, so we lower the chances of orphaned files
-    RubygemFs.instance.store(gem_path, gem_contents, checksum_sha256: version.sha256,
-                             metadata: {
-                               "gem" => version.rubygem.name, "version" => version.number, "platform" => version.platform,
-                               "surrogate-key" => "gem/#{version.rubygem.name}", "sha256" => version.sha256
-                             })
-    RubygemFs.instance.store(spec_path, spec_contents, checksum_sha256: version.spec_sha256)
+    gem_paths.uniq.each do |gem_path|
+      RubygemFs.instance.store(gem_path, gem_contents, checksum_sha256: version.sha256,
+                               metadata: {
+                                 "gem" => version.rubygem.name, "version" => version.number, "platform" => version.platform,
+                                 "surrogate-key" => "gem/#{version.rubygem.name}", "sha256" => version.sha256
+                               })
+    end
 
-    Fastly.purge(path: gem_path)
-    Fastly.purge(path: spec_path)
+    spec_paths.uniq.each do |spec_path|
+      RubygemFs.instance.store(spec_path, spec_contents, checksum_sha256: version.spec_sha256)
+    end
+
+    gem_paths.each { |gem_path| Fastly.purge(path: gem_path) }
+    spec_paths.each { |spec_path| Fastly.purge(path: spec_path) }
   end
 
   def log_pushing

@@ -3,6 +3,10 @@
 module CompactIndex
   module GemVersionMethods
     def number_and_platform
+      if artifact_id && !artifact_id.empty?
+        return "#{number}-#{artifact_id}"
+      end
+
       if platform.nil? || platform == "ruby"
         number
       else
@@ -24,6 +28,7 @@ module CompactIndex
       line = "#{number_and_platform} #{deps_line}|checksum:#{checksum}"
       line << ",ruby:#{ruby_version_line}" if ruby_version && ruby_version != ">= 0"
       line << ",rubygems:#{rubygems_version_line}" if rubygems_version && rubygems_version != ">= 0"
+      line << ",platform:=#{platform}" if artifact_id && !artifact_id.empty? && platform && platform != "ruby"
       line
     end
 
@@ -53,13 +58,14 @@ module CompactIndex
   end
 
   GemVersion = Struct.new(:number, :platform, :checksum, :info_checksum,
-                          :dependencies, :ruby_version, :rubygems_version) do
+                          :dependencies, :ruby_version, :rubygems_version,
+                          :artifact_id) do
     include GemVersionMethods
   end
 
   GemVersionV2 = Struct.new(:number, :platform, :checksum, :info_checksum,
                             :dependencies, :ruby_version, :rubygems_version,
-                            :created_at) do
+                            :created_at, :artifact_id) do
     include GemVersionMethods
 
     def to_line

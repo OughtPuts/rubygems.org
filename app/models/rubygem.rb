@@ -182,22 +182,27 @@ class Rubygem < ApplicationRecord
 
   # NB: this intentionally does not default the platform to ruby.
   # Without platform, finds the most recent version by (position, created_at) ignoring platform.
-  def find_public_version(number, platform = nil)
+  def find_public_version(number, platform = nil, ruby_requirement: nil, content_address: nil)
     if platform
-      public_versions.find_by(number:, platform:)
+      find_matching_version(public_versions, number:, platform:, ruby_requirement:, content_address:)
     else
       public_versions.find_by(number:)
     end
+  rescue ActiveRecord::RecordNotFound
+    nil
   end
 
-  def public_version_payload(number, platform = nil)
-    version = find_public_version(number, platform)
+  def public_version_payload(number, platform = nil, ruby_requirement: nil, content_address: nil)
+    version = find_public_version(number, platform, ruby_requirement:, content_address:)
     payload(version).merge!(version.as_json) if version
   end
 
-  def find_version!(number:, platform:)
+  def find_version!(number:, platform:, ruby_requirement: nil, content_address: nil)
     platform = platform.presence || "ruby"
-    versions.find_by!(number: number, platform: platform)
+    version = find_matching_version(versions, number:, platform:, ruby_requirement:, content_address:)
+    raise ActiveRecord::RecordNotFound if version.nil?
+
+    version
   end
 
   def find_version_by_slug!(slug)
@@ -266,6 +271,7 @@ class Rubygem < ApplicationRecord
       "yanked"             => version.yanked?,
       "sha"                => version.sha256_hex,
       "spec_sha"           => version.spec_sha256_hex,
+      "content_address"    => version.content_address,
       "project_uri"        => "#{protocol}://#{host_with_port}/gems/#{name}",
       "gem_uri"            => "#{protocol}://#{host_with_port}/gems/#{version.gem_file_name}",
       "homepage_uri"       => versioned_links.homepage_uri,
@@ -395,6 +401,22 @@ class Rubygem < ApplicationRecord
   end
 
   private
+
+  def find_matching_version(scope, number:, platform:, ruby_requirement: nil, content_address: nil)
+    matches = scope.where(number:, platform:)
+    matches = matches.where(required_ruby_version: ruby_requirement) if ruby_requirement.present?
+
+    if content_address.present?
+      matches.detect { |version| version.content_address == content_address }
+    elsif ruby_requirement.present?
+      matches.first
+    else
+      candidates = matches.to_a
+      return candidates.first if candidates.one?
+
+      raise ActiveRecord::RecordNotFound
+    end
+  end
 
   # a gem namespace is not protected if it is
   # updated(yanked) in more than 100 days or it is created in last 30 days

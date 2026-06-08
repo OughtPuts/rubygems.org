@@ -8,7 +8,12 @@ class Api::V2::VersionsController < Api::BaseController
     cache_expiry_headers
     set_surrogate_key "gem/#{@rubygem.name}"
 
-    version = @rubygem.public_version_payload(version_params[:number], version_params[:platform])
+    version = @rubygem.public_version_payload(
+      version_params[:number],
+      version_params[:platform],
+      ruby_requirement: version_params[:ruby_requirement],
+      content_address: version_params[:content_address]
+    )
     if version
       respond_to do |format|
         format.json { render json: version }
@@ -22,6 +27,6 @@ class Api::V2::VersionsController < Api::BaseController
   protected
 
   def version_params
-    params.permit(:platform, :number)
+    params.permit(:platform, :number, :ruby_requirement, :content_address)
   end
 end
